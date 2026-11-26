@@ -110,8 +110,9 @@ TT_MANIFEST = [
 ]
 
 OWN_TEXT_FILES = [
-    "run.sh", "lib/mzd-safety.sh", "lib/aa-touch.sh", "lib/combined.sh",
+    "run.sh", "lib/mzd-safety.sh", "lib/aa-touch.sh", "lib/xx74.sh", "lib/combined.sh",
     "payload/install.sh", "payload/uninstall.sh", "payload/diagnose.sh",
+    "xx74/autorun", "xx74/SOURCE.txt",
 ]
 # Must match EXPECTED in stick/run.sh.
 PAYLOAD_MANIFEST = [
@@ -137,7 +138,7 @@ MAZDA_HASHES = {
 SYSTEM_ENTRIES = {"System Volume Information", "$RECYCLE.BIN", ".fseventsd",
                   ".Spotlight-V100", ".Trashes", ".TemporaryItems"}
 KEEP_ON_UPDATE = ("mzd-usb.log",)
-KEEP_DIR_PREFIX = "backup-aa-touch-"     # the user's copy of the car's files
+KEEP_DIR_PREFIXES = ("backup-aa-touch-", "backup-xx74-")  # copies of the car's files
 TT_LOG = "touchtune/touchtune.log"
 MAC_JUNK_DIRS = (".fseventsd", ".Spotlight-V100", ".Trashes", ".TemporaryItems")
 
@@ -460,7 +461,7 @@ def keep_on_update(p):
         return True
     if p.name.startswith("diag-") and p.name.endswith(".txt") and p.is_file():
         return True
-    return p.name.startswith(KEEP_DIR_PREFIX) and p.is_dir() and not p.is_symlink()
+    return p.name.startswith(KEEP_DIR_PREFIXES) and p.is_dir() and not p.is_symlink()
 
 
 def write_target(files, target):

@@ -11,11 +11,15 @@
 #   3. TouchTune exit 0 does not prove a change (its guard and cancel paths also
 #      exit 0), so its guard is checked before any change and the TouchTune
 #      state is read again after the child.
-#   4. TouchTune starts only after the Android Auto transaction has been
-#      finalized (rootfs read-only, watchdog re-enabled); after a TouchTune
-#      failure this run writes nothing more and does not restart.
-#   5. Nothing is rolled back automatically across the two parts: each part is
+#   4. TouchTune starts only after the Android Auto transaction and the boot
+#      autorun transaction have been finalized (rootfs read-only, watchdog
+#      re-enabled); after a failure this run writes nothing more and does not
+#      restart.
+#   5. Nothing is rolled back automatically across the parts: each part is
 #      its own verified transaction, and running the stick again is idempotent.
+#   6. Boot autorun (lib/xx74.sh, sourced by the caller before this file) is
+#      the third part. It only adds a startup hook. It does not start this
+#      installer and it does not run commands from a USB file.
 #
 # Copyright (C) 2026 caeptncrack
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -134,7 +138,7 @@ combined_tt_label() {
     esac
 }
 
-# Combined state for the start dialog; sets COMBINED_AA and COMBINED_TT.
+# Combined state for the start dialog; sets COMBINED_AA, COMBINED_TT, COMBINED_XX.
 combined_detect() {
     if aa_verify_payload >/dev/null 2>&1; then
         aa_state_parse
@@ -147,7 +151,12 @@ combined_detect() {
     else
         COMBINED_TT=payload-invalid
     fi
-    mzd_log "detected state: Android Auto touch=$COMBINED_AA TouchTune=$COMBINED_TT"
+    if xx74_payload_ok >/dev/null 2>&1; then
+        COMBINED_XX=$(xx74_state)
+    else
+        COMBINED_XX=payload-invalid
+    fi
+    mzd_log "detected state: Android Auto touch=$COMBINED_AA TouchTune=$COMBINED_TT boot autorun=$COMBINED_XX"
 }
 
 # ---------------------------------------------------------------------------
@@ -155,8 +164,8 @@ combined_detect() {
 # ---------------------------------------------------------------------------
 
 combined_install() {
-    local aa_before tt_before rc aa_todo=0 tt_todo=0 tt_after
-    mzd_log "=== combined install: Android Auto touch + TouchTune ==="
+    local aa_before tt_before xx_before rc aa_todo=0 tt_todo=0 xx_todo=0 tt_after reboot_text
+    mzd_log "=== combined install: Android Auto touch + boot autorun + TouchTune ==="
     if ! mzd_require_firmware; then
         mzd_popup "Unsupported firmware.\n\nThis installer supports Mazda Connect 74.00.324 and 74.00.324A.\nNothing was changed."
         return 1
@@ -173,6 +182,10 @@ combined_install() {
         mzd_popup "The TouchTune files on the stick are missing or damaged.\n\nNothing was changed."
         return 1
     }
+    xx74_payload_ok || {
+        mzd_popup "The boot autorun files on the stick are missing or damaged.\n\nNothing was changed."
+        return 1
+    }
     if combined_tt_guard_present; then
         mzd_popup "A TouchTune installer is already running.\n\nNothing was changed.\nPlease wait or restart Mazda Connect."
         return 1
@@ -180,7 +193,8 @@ combined_install() {
     aa_state_parse
     aa_before="$AA_STATE"
     tt_before=$(combined_tt_state)
-    mzd_log "state before the combined install: AA=$aa_before${AA_STATE_REASON:+ ($AA_STATE_REASON)} TouchTune=$tt_before"
+    xx_before=$(xx74_state)
+    mzd_log "state before the combined install: AA=$aa_before${AA_STATE_REASON:+ ($AA_STATE_REASON)} TouchTune=$tt_before boot autorun=$xx_before"
     case "$aa_before" in
         clean|partial|outdated) aa_todo=1 ;;
         ours) aa_todo=0 ;;
@@ -191,28 +205,67 @@ combined_install() {
         installed) tt_todo=0 ;;
         *) tt_todo=skip ;;
     esac
-    if [ "$aa_todo" = 0 ] && [ "$tt_todo" = 0 ]; then
-        mzd_popup "Android Auto touch and TouchTune are already installed.\n\nThere is nothing to do."
+    case "$xx_before" in
+        clean|partial) xx_todo=1 ;;
+        ours) xx_todo=0 ;;
+        *) xx_todo=skip ;;
+    esac
+    if [ "$aa_todo" = 0 ] && [ "$tt_todo" = 0 ] && [ "$xx_todo" = 0 ]; then
+        mzd_popup "Android Auto touch, TouchTune and boot autorun are already installed.\n\nThere is nothing to do."
         return 0
     fi
-    # One part cannot be installed on this unit: offer the other one alone.
-    if [ "$aa_todo" = skip ] && [ "$tt_todo" = skip ]; then
-        mzd_popup "Neither part can be installed safely.\n\nAndroid Auto touch: $(combined_aa_label "$aa_before")\nTouchTune: $(combined_tt_label "$tt_before")\n\nNothing was changed. Details: mzd-usb.log"
+    if [ "$aa_todo" != 1 ] && [ "$tt_todo" != 1 ] && [ "$xx_todo" != 1 ]; then
+        mzd_popup "Neither part can be installed safely.\n\nAndroid Auto touch: $(combined_aa_label "$aa_before")\nTouchTune: $(combined_tt_label "$tt_before")\nBoot autorun: $(xx74_label "$xx_before")\n\nNothing was changed. Details: mzd-usb.log"
         return 1
     fi
+    # A part that is not safe to touch is left alone; the start dialog's
+    # "Install" is then confirmed again for whatever remains.
     if [ "$aa_todo" = skip ]; then
-        mzd_ask2 "Android Auto touch: $(combined_aa_label "$aa_before") - it is left alone.\n\nInstall only TouchTune (touch while driving)?" "TouchTune only" "Cancel" || {
-            mzd_popup "Cancelled.\n\nNothing was changed."
-            return 1
-        }
+        if [ "$tt_todo" = 1 ] && [ "$xx_todo" = 1 ]; then
+            mzd_ask2 "Android Auto touch: $(combined_aa_label "$aa_before") - it is left alone.\n\nInstall TouchTune and boot autorun?" "Continue" "Cancel" || {
+                mzd_popup "Cancelled.\n\nNothing was changed."
+                return 1
+            }
+        elif [ "$tt_todo" = 1 ]; then
+            mzd_ask2 "Android Auto touch: $(combined_aa_label "$aa_before") - it is left alone.\n\nInstall only TouchTune (touch while driving)?" "TouchTune only" "Cancel" || {
+                mzd_popup "Cancelled.\n\nNothing was changed."
+                return 1
+            }
+        else
+            mzd_ask2 "Android Auto touch: $(combined_aa_label "$aa_before") - it is left alone.\n\nInstall only boot autorun?" "Boot autorun only" "Cancel" || {
+                mzd_popup "Cancelled.\n\nNothing was changed."
+                return 1
+            }
+        fi
         aa_todo=0
     fi
     if [ "$tt_todo" = skip ]; then
-        mzd_ask2 "TouchTune: $(combined_tt_label "$tt_before") - it is left alone.\n\nInstall only Android Auto touch?" "AA touch only" "Cancel" || {
-            mzd_popup "Cancelled.\n\nNothing was changed."
-            return 1
-        }
+        if [ "$aa_todo" = 1 ] && [ "$xx_todo" = 1 ]; then
+            mzd_ask2 "TouchTune: $(combined_tt_label "$tt_before") - it is left alone.\n\nInstall Android Auto touch and boot autorun?" "Continue" "Cancel" || {
+                mzd_popup "Cancelled.\n\nNothing was changed."
+                return 1
+            }
+        elif [ "$aa_todo" = 1 ]; then
+            mzd_ask2 "TouchTune: $(combined_tt_label "$tt_before") - it is left alone.\n\nInstall only Android Auto touch?" "AA touch only" "Cancel" || {
+                mzd_popup "Cancelled.\n\nNothing was changed."
+                return 1
+            }
+        elif [ "$xx_todo" = 1 ]; then
+            mzd_ask2 "TouchTune: $(combined_tt_label "$tt_before") - it is left alone.\n\nInstall only boot autorun?" "Boot autorun only" "Cancel" || {
+                mzd_popup "Cancelled.\n\nNothing was changed."
+                return 1
+            }
+        fi
         tt_todo=0
+    fi
+    if [ "$xx_todo" = skip ]; then
+        if [ "$aa_todo" = 1 ] || [ "$tt_todo" = 1 ]; then
+            mzd_ask2 "Boot autorun: $(xx74_label "$xx_before") - it is left alone.\n\nInstall the other parts?" "Continue" "Cancel" || {
+                mzd_popup "Cancelled.\n\nNothing was changed."
+                return 1
+            }
+        fi
+        xx_todo=0
     fi
 
     if [ "$aa_todo" = 1 ]; then
@@ -223,15 +276,29 @@ combined_install() {
         rc=$?
         unset MZD_SKIP_REBOOT
         if [ "$rc" -ne 0 ]; then
-            mzd_popup "The Android Auto touch installation did not complete; TouchTune was not started.\n\nDetails: mzd-usb.log"
+            mzd_popup "The Android Auto touch installation did not complete; the other parts were not started.\n\nDetails: mzd-usb.log"
             return 1
         fi
         aa_state_parse
         if [ "$AA_STATE" != ours ]; then
-            mzd_popup "The final check of Android Auto touch failed ($AA_STATE).\n\nTouchTune was not started; no restart."
+            mzd_popup "The final check of Android Auto touch failed ($AA_STATE).\n\nThe other parts were not started; no restart."
             return 1
         fi
-        mzd_log "Android Auto touch finalized; now TouchTune"
+        mzd_log "Android Auto touch finalized"
+    fi
+
+    if [ "$xx_todo" = 1 ]; then
+        xx74_install
+        rc=$?
+        if [ "$rc" -ne 0 ]; then
+            mzd_popup "The boot autorun installation did not complete; TouchTune was not started.\n\nDetails: mzd-usb.log"
+            return 1
+        fi
+        if [ "$(xx74_state)" != ours ]; then
+            mzd_popup "The final check of boot autorun failed.\n\nTouchTune was not started; no restart."
+            return 1
+        fi
+        mzd_log "boot autorun finalized"
     fi
 
     if [ "$tt_todo" = 1 ]; then
@@ -256,8 +323,15 @@ combined_install() {
         return 0
     fi
 
-    # Only Android Auto touch changed in this run.
-    if ! mzd_ask_reboot "Android Auto touch is $([ "$aa_before" = outdated ] && echo updated || echo installed).\nTouchTune: $(combined_tt_label "$(combined_tt_state)")."; then
+    # TouchTune did not run, so this installer asks for the one restart.
+    if [ "$aa_todo" = 1 ] && [ "$xx_todo" = 1 ]; then
+        reboot_text="Android Auto touch is $([ "$aa_before" = outdated ] && echo updated || echo installed).\nBoot autorun is installed.\nTouchTune: $(combined_tt_label "$(combined_tt_state)")."
+    elif [ "$aa_todo" = 1 ]; then
+        reboot_text="Android Auto touch is $([ "$aa_before" = outdated ] && echo updated || echo installed).\nTouchTune: $(combined_tt_label "$(combined_tt_state)")."
+    else
+        reboot_text="Boot autorun is installed.\nAndroid Auto touch: $(combined_aa_label "$(aa_state_parse; printf '%s' "$AA_STATE")")\nTouchTune: $(combined_tt_label "$(combined_tt_state)")."
+    fi
+    if ! mzd_ask_reboot "$reboot_text"; then
         mzd_popup "The restart could not be requested.\n\nPlease restart Mazda Connect manually."
     fi
     return 0
@@ -268,8 +342,8 @@ combined_install() {
 # ---------------------------------------------------------------------------
 
 combined_revert() {
-    local aa_before tt_before rc aa_done=0 tt_after aa_note
-    mzd_log "=== combined removal: Android Auto touch + TouchTune ==="
+    local aa_before tt_before xx_before rc aa_done=0 xx_done=0 tt_after xx_after aa_note xx_note reboot_text
+    mzd_log "=== combined removal: Android Auto touch + boot autorun + TouchTune ==="
     if ! mzd_require_firmware; then
         mzd_popup "Unsupported firmware.\n\nNothing was changed."
         return 1
@@ -282,6 +356,10 @@ combined_revert() {
         mzd_popup "The TouchTune files on the stick are missing or damaged.\n\nNothing was changed."
         return 1
     }
+    xx74_payload_ok || {
+        mzd_popup "The boot autorun files on the stick are missing or damaged.\n\nNothing was changed."
+        return 1
+    }
     if combined_tt_guard_present; then
         mzd_popup "A TouchTune installer is already running.\n\nNothing was changed."
         return 1
@@ -289,7 +367,8 @@ combined_revert() {
     aa_state_parse
     aa_before="$AA_STATE"
     tt_before=$(combined_tt_state)
-    mzd_log "state before the combined removal: AA=$aa_before${AA_STATE_REASON:+ ($AA_STATE_REASON)} TouchTune=$tt_before"
+    xx_before=$(xx74_state)
+    mzd_log "state before the combined removal: AA=$aa_before${AA_STATE_REASON:+ ($AA_STATE_REASON)} TouchTune=$tt_before boot autorun=$xx_before"
 
     case "$aa_before" in
         clean) ;;
@@ -301,12 +380,12 @@ combined_revert() {
             rc=$?
             unset MZD_SKIP_REBOOT
             if [ "$rc" -ne 0 ]; then
-                mzd_popup "The removal of Android Auto touch did not complete; TouchTune was not touched.\n\nNo restart. Details: mzd-usb.log"
+                mzd_popup "The removal of Android Auto touch did not complete; the other parts were not touched.\n\nNo restart. Details: mzd-usb.log"
                 return 1
             fi
             aa_state_parse
             if [ "$AA_STATE" != clean ]; then
-                mzd_popup "The removal of Android Auto touch could not be confirmed ($AA_STATE).\n\nTouchTune was not touched; no restart."
+                mzd_popup "The removal of Android Auto touch could not be confirmed ($AA_STATE).\n\nThe other parts were not touched; no restart."
                 return 1
             fi
             aa_done=1
@@ -325,6 +404,34 @@ combined_revert() {
         aa_note="left alone ($(combined_aa_label "$aa_before"))"
     fi
 
+    case "$xx_before" in
+        ours|partial)
+            xx74_revert
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+                mzd_popup "The removal of boot autorun did not complete; TouchTune was not touched.\n\nNo restart. Details: mzd-usb.log"
+                return 1
+            fi
+            xx_after=$(xx74_state)
+            if [ "$xx_after" != clean ] && [ "$xx_after" != missing ]; then
+                mzd_popup "The removal of boot autorun could not be confirmed ($xx_after).\n\nTouchTune was not touched; no restart."
+                return 1
+            fi
+            xx_done=1
+            mzd_log "boot autorun removed; original startup scripts verified"
+            ;;
+        *)
+            mzd_log "boot autorun state $xx_before is left alone"
+            ;;
+    esac
+    if [ "$xx_done" = 1 ]; then
+        xx_note=removed
+    elif [ "$xx_before" = clean ] || [ "$xx_before" = missing ]; then
+        xx_note="not installed"
+    else
+        xx_note="left alone ($(xx74_label "$xx_before"))"
+    fi
+
     case "$tt_before" in
         installed|partial)
             combined_tt_run --restore
@@ -336,7 +443,7 @@ combined_revert() {
                 else
                     tt_note="No restart. Logs on the stick: mzd-usb.log, touchtune/touchtune.log"
                 fi
-                mzd_popup "The TouchTune removal could not be confirmed (exit $rc, state $tt_after).\n\nAndroid Auto touch: $aa_note\nTouchTune: $(combined_tt_label "$tt_after")\n\n$tt_note"
+                mzd_popup "The TouchTune removal could not be confirmed (exit $rc, state $tt_after).\n\nAndroid Auto touch: $aa_note\nBoot autorun: $xx_note\nTouchTune: $(combined_tt_label "$tt_after")\n\n$tt_note"
                 return 1
             fi
             mzd_log "TouchTune removed and read back; it requests the final SafeReboot"
@@ -348,12 +455,19 @@ combined_revert() {
             ;;
     esac
 
-    if [ "$aa_done" = 1 ]; then
-        if ! mzd_ask_reboot "Android Auto touch is removed.\nTouchTune: $(combined_tt_label "$tt_before")."; then
+    if [ "$aa_done" = 1 ] || [ "$xx_done" = 1 ]; then
+        if [ "$aa_done" = 1 ] && [ "$xx_done" = 1 ]; then
+            reboot_text="Android Auto touch is removed.\nBoot autorun is removed.\nTouchTune: $(combined_tt_label "$tt_before")."
+        elif [ "$aa_done" = 1 ]; then
+            reboot_text="Android Auto touch is removed.\nTouchTune: $(combined_tt_label "$tt_before")."
+        else
+            reboot_text="Boot autorun is removed.\nAndroid Auto touch: $aa_note\nTouchTune: $(combined_tt_label "$tt_before")."
+        fi
+        if ! mzd_ask_reboot "$reboot_text"; then
             mzd_popup "The restart could not be requested.\n\nPlease restart Mazda Connect manually."
         fi
         return 0
     fi
-    mzd_popup "Nothing to remove.\n\nAndroid Auto touch: $aa_note\nTouchTune: $(combined_tt_label "$tt_before")"
+    mzd_popup "Nothing to remove.\n\nAndroid Auto touch: $aa_note\nBoot autorun: $xx_note\nTouchTune: $(combined_tt_label "$tt_before")"
     return 0
 }

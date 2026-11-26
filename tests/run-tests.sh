@@ -132,6 +132,7 @@ make_cmu() {
     mkdir -p "$dest/jci/sm" "$dest/jci/aapa" "$dest/jci/navi" "$dest/jci/tools" \
         "$dest/jci/scripts" "$dest/jci/gui/common/js" "$dest/usr/bin" "$dest/etc" \
         "$dest/etc/wayland" "$dest/dev/input" "$dest/data_persist" "$dest/data" \
+        "$dest/jci/bin" "$dest/usr/sbin" \
         "$dest/sys/class/gpio/Watchdog Disable" "$dest/sys/class/nvram/nv-config/keys" \
         "$dest/proc" "$dest/tmp"
     cat >"$dest/jci/version.ini" <<'EOF'
@@ -163,6 +164,18 @@ EOF
     printf 'ELF-TEST-NAVI\n' >"$dest/jci/navi/svcjcinavi.so"
     printf 'ELF-TEST-AAP\n' >"$dest/usr/bin/aap_service"
     printf '### test common.js\n' >"$dest/jci/gui/common/js/Common.js"
+    cat >"$dest/jci/scripts/start_normal_mode.sh" <<'EOF'
+#!/bin/sh
+echo FACTORY-START-SCRIPTS
+EOF
+    cat >"$dest/jci/bin/start_normal_mode.sh" <<'EOF'
+#!/bin/sh
+echo FACTORY-START-BIN
+EOF
+    cat >"$dest/usr/sbin/emmc_mount_data_persist.sh" <<'EOF'
+#!/bin/sh
+echo FACTORY-EMMC-MOUNT
+EOF
     printf 'rootfs / relfs ro 0 0\n' >"$dest/proc/mounts"
     printf '0\n' >"$dest/sys/class/gpio/Watchdog Disable/value"
     printf 'input = /dev/input/filtered-touchscreen0\n' >"$dest/etc/wayland/compositor.conf"
@@ -280,7 +293,10 @@ make_stick() {
     v16="${2:-false}"
     mkdir -p "$dest/lib" "$dest/payload" "$dest/aa-mod" "$dest/touchtune/lib" "$dest/touchtune/patches"
     cp "$SRC/run.sh" "$dest/run.sh"
-    for f in mzd-safety.sh aa-touch.sh combined.sh; do cp "$SRC/lib/$f" "$dest/lib/$f"; done
+    for f in mzd-safety.sh aa-touch.sh xx74.sh combined.sh; do cp "$SRC/lib/$f" "$dest/lib/$f"; done
+    mkdir -p "$dest/xx74"
+    cp "$SRC/xx74/autorun" "$dest/xx74/autorun"
+    cp "$SRC/xx74/SOURCE.txt" "$dest/xx74/SOURCE.txt"
     printf 'fake touchtune launcher\n' >"$dest/lib/touchtune-launcher"
     for f in install.sh uninstall.sh diagnose.sh; do cp "$SRC/payload/$f" "$dest/payload/$f"; done
     cp "$REPO/VERSION" "$dest/VERSION"
@@ -344,8 +360,9 @@ TTEOF
     printf 'stock\n' >"$dest/touchtune/.tt-state"
     : >"$dest/PAYLOAD.SHA256"
     for rel in VERSION STICK.ID LAUNCHER.NAME jci-autoupdate run.sh \
-        lib/mzd-safety.sh lib/aa-touch.sh lib/combined.sh lib/touchtune-launcher \
+        lib/mzd-safety.sh lib/aa-touch.sh lib/xx74.sh lib/combined.sh lib/touchtune-launcher \
         payload/install.sh payload/uninstall.sh payload/diagnose.sh aa-mod/SHA256SUMS \
+        xx74/autorun xx74/SOURCE.txt \
         touchtune/install-patches.sh touchtune/lib/touchtune-helpers.sh \
         touchtune/patches/touch-while-driving.sh touchtune/PAYLOAD.SHA256 \
         touchtune/TOUCHTUNE.ID touchtune/VERSION touchtune/LAUNCHER.NAME \
@@ -504,6 +521,7 @@ lib_eval() {
         mkdir -p "$MZD_STICK"
         . "$SRC/lib/mzd-safety.sh"
         . "$SRC/lib/aa-touch.sh"
+        . "$SRC/lib/xx74.sh"
         . "$SRC/lib/combined.sh"
         eval "$*"
     ) 2>/dev/null
@@ -585,7 +603,7 @@ STICK=$(new_stick install)
 BEFORE=$(stock_sums "$CMU")
 run_stick "$CMU" "$STICK" install
 check_rc 'install exit code' "$?" 0
-check_contains 'payload verified (25 files)' "$TESTROOT/run.log" 'payload completely verified (25 files)'
+check_contains 'payload verified (28 files)' "$TESTROOT/run.log" 'payload completely verified (28 files)'
 check_no_file 'fresh stick: no TouchTune launcher in touchtune/' "$(new_stick fresh-check)/touchtune/$TT_LAUNCHER"
 check_contains 'TouchTune launcher written' "$TESTROOT/run.log" 'TouchTune launcher written to the stick'
 check_hash 'TouchTune launcher = lib copy' "$STICK/touchtune/$TT_LAUNCHER" \
@@ -615,6 +633,12 @@ check_contains 'install marker: installer version' "$CMU/data_persist/oem-aa-mod
 check_not_contains 'fresh install: no previous installer' "$CMU/data_persist/oem-aa-mod/install-state" 'previous_installer='
 check_contains 'libpatch.conf on the car: 1.6 off' "$CMU/data_persist/oem-aa-mod/libpatch.conf" 'use_protocol_v1_6 = false'
 check_eq 'exactly one backup on the car' 1 "$(backup_count "$CMU")"
+check_file 'boot autorun installed' "$CMU/data_persist/dev/bin/autorun"
+check_contains 'startup script ends with the hook' "$CMU/jci/scripts/start_normal_mode.sh" '# mzd-xx74 begin'
+check_contains 'factory line kept in the startup script' "$CMU/jci/scripts/start_normal_mode.sh" 'FACTORY-START-SCRIPTS'
+check_not_contains 'installed autorun does not look for run.sh' "$CMU/data_persist/dev/bin/autorun" 'run.sh'
+check_not_contains 'installed autorun does not touch the watchdog' "$CMU/data_persist/dev/bin/autorun" 'Watchdog'
+check_eq 'one boot-autorun backup' 1 "$(find "$CMU/data_persist/mzd-xx74/backups" -maxdepth 1 -type d -name '[0-9]*' | wc -l | tr -d '[:space:]')"
 check_xmls 'XML well-formed after install' "$CMU"
 check_no_stages 'no stage files left' "$CMU"
 check_dir 'backup copy on the stick' "$(ls -d "$STICK"/backup-aa-touch-* 2>/dev/null | head -n1)"
@@ -639,6 +663,8 @@ check_contains 'already installed reported' "$TESTROOT/run.log" 'already install
 check_contains 'nothing to do: the stick may be pulled' "$TESTROOT/run.log" 'There is nothing to do.\n\nYou can pull the stick now.'
 check_eq 'TouchTune not called again' 1 "$(tt_calls "$STICK" touch-while-driving)"
 check_eq 'still one backup' 1 "$(backup_count "$CMU")"
+check_eq 'second run: still one boot-autorun backup' 1 \
+    "$(find "$CMU/data_persist/mzd-xx74/backups" -maxdepth 1 -type d -name '[0-9]*' | wc -l | tr -d '[:space:]')"
 check_eq 'result unchanged' "$AFTER1" "$(stock_sums "$CMU")"
 
 section 'Status'
@@ -647,6 +673,7 @@ check_rc 'status exit code' "$?" 0
 check_contains 'status: AA ours' "$TESTROOT/run.log" 'state=ours'
 check_contains 'status: XML variant factory+touch' "$TESTROOT/run.log" 'aap_system_attributes.xml variant=factory+touch'
 check_contains 'status: TouchTune installed' "$TESTROOT/run.log" 'touchtune=installed'
+check_contains 'status: boot autorun installed' "$TESTROOT/run.log" 'xx74=ours'
 
 section 'Remove both (ACTION.txt uninstall)'
 run_stick "$CMU" "$STICK" uninstall
@@ -657,6 +684,9 @@ check_no_file 'install marker removed' "$CMU/data_persist/oem-aa-mod/install-sta
 check_dir 'removed shims kept aside on the car' "$(ls -d "$CMU"/data_persist/mzd-aa-touch/removed/* 2>/dev/null | head -n1)"
 check_xmls 'XML well-formed after removal' "$CMU"
 check_eq 'TouchTune --restore called' 1 "$(tt_calls "$STICK" --restore)"
+check_no_file 'boot autorun removed' "$CMU/data_persist/dev/bin/autorun"
+check_not_contains 'startup script hook removed' "$CMU/jci/scripts/start_normal_mode.sh" '# mzd-xx74 begin'
+check_contains 'startup script factory text restored' "$CMU/jci/scripts/start_normal_mode.sh" 'FACTORY-START-SCRIPTS'
 check_contains 'TouchTune state stock' "$STICK/touchtune/.tt-state" stock
 run_stick "$CMU" "$STICK" status
 check_contains 'status: clean again' "$TESTROOT/run.log" 'state=clean'
@@ -751,7 +781,7 @@ BEFOREY=$(stock_sums "$CMUY")
 run_stick "$CMUY" "$STICKY" install
 check_rc 'unknown XML layout: TouchTune alone accepted' "$?" 0
 check_contains 'unknown XML layout: reason logged' "$TESTROOT/run.log" 'has an unexpected layout (touch cannot be added safely)'
-check_contains 'unknown XML layout: TouchTune alone offered' "$TESTROOT/run.log" 'Install only TouchTune'
+check_contains 'unknown XML layout: TouchTune and boot autorun offered' "$TESTROOT/run.log" 'Install TouchTune and boot autorun'
 check_stock_unchanged 'unknown XML layout: AA files untouched' "$CMUY" "$BEFOREY"
 check_eq 'unknown XML layout: no backup' 0 "$(backup_count "$CMUY")"
 check_eq 'unknown XML layout: TouchTune installed' 1 "$(tt_calls "$STICKY" touch-while-driving)"
@@ -824,7 +854,7 @@ run_stick "$CMUU" "$STICKU" - '' '2'
 check_rc 'update offered -> Cancel: exit code' "$?" 0
 check_contains 'start dialog: older version named' "$TESTROOT/run.log" 'Android Auto touch: older version installed'
 check_contains 'start dialog: update offered' "$TESTROOT/run.log" 'An update for Android Auto touch is available.'
-check_contains 'start dialog: Update / Remove both' "$TESTROOT/run.log" '[Update|Remove both|Cancel]'
+check_contains 'start dialog: Update / Remove all' "$TESTROOT/run.log" '[Update|Remove all|Cancel]'
 check_eq 'Cancel: nothing changed' "$AFTERU" "$(stock_sums "$CMUU")"
 run_stick "$CMUU" "$STICKU" - '' '0 0'
 check_rc 'update from the start dialog: exit code' "$?" 0
@@ -1065,7 +1095,7 @@ cp -a "$CMU7/jci/sm/sm.conf" "$CMU7/jci/sm/sm.conf.orig"
 BEFORE7=$(stock_sums "$CMU7")
 run_stick "$CMU7" "$STICK7" install '' '0 1'
 check_rc_nonzero '"TouchTune only" declined: exit code' "$?"
-check_contains 'TouchTune-only offered' "$TESTROOT/run.log" 'Install only TouchTune'
+check_contains 'TouchTune and boot autorun offered' "$TESTROOT/run.log" 'Install TouchTune and boot autorun'
 check_stock_unchanged 'AA files untouched (declined)' "$CMU7" "$BEFORE7"
 check_eq 'TouchTune not started (declined)' 0 "$(tt_calls "$STICK7" .)"
 run_stick "$CMU7" "$STICK7" install
@@ -1104,7 +1134,7 @@ rm -f "$STICK9/touchtune/.tt-state"
 printf '// another build\n' >"$CMU9/jci/gui/common/js/Common.js"
 run_stick "$CMU9" "$STICK9" install
 check_rc '"AA touch only" accepted: exit code' "$?" 0
-check_contains 'AA-only offered' "$TESTROOT/run.log" 'Install only Android Auto touch'
+check_contains 'AA touch and boot autorun offered' "$TESTROOT/run.log" 'Install Android Auto touch and boot autorun'
 check_eq 'AA installed alone' 2 "$(count_markers "$CMU9/jci/sm/sm.conf")"
 check_eq 'TouchTune not started' 0 "$(tt_calls "$STICK9" .)"
 check_contains 'restart asked by this installer' "$TESTROOT/run.log" 'TEST: SafeReboot would be requested now'
@@ -1209,7 +1239,7 @@ check_eq 'staged XML invalid: TouchTune not started' 0 "$(tt_calls "$STICKX" .)"
 run_stick "$CMUX" "$STICKX" install '' '0 1' 'MZD_TEST_XMLLINT_FAIL=1'
 check_rc_nonzero 'live XML not validatable: AA refused' "$?"
 check_contains 'live XML not validatable: reason logged' "$TESTROOT/run.log" 'is not well-formed XML'
-check_contains 'live XML not validatable: TouchTune alone offered' "$TESTROOT/run.log" 'Install only TouchTune'
+check_contains 'live XML not validatable: TouchTune and boot autorun offered' "$TESTROOT/run.log" 'Install TouchTune and boot autorun'
 check_stock_unchanged 'live XML not validatable: unchanged' "$CMUX" "$BEFOREX"
 check_eq 'live XML not validatable: TouchTune declined' 0 "$(tt_calls "$STICKX" .)"
 
@@ -1317,7 +1347,7 @@ check_rc 'Diagnosis -> Back -> Cancel: exit code' "$?" 0
 check_contains 'Diagnosis asks first' "$TESTROOT/run.log" 'Selected: Diagnosis'
 check_contains 'Diagnosis confirmation: Start/Back' "$TESTROOT/run.log" '[Start|Back] -> 1'
 check_contains 'Back returns to the start dialog' "$TESTROOT/run.log" 'confirmation: Back to the start dialog'
-check_eq 'start dialog shown twice' 2 "$(grep -c -F 'Install Android Auto touch and touch while driving?' "$TESTROOT/run.log" | tr -d '[:space:]')"
+check_eq 'start dialog shown twice' 2 "$(grep -c -F 'Install Android Auto touch, touch while driving' "$TESTROOT/run.log" | tr -d '[:space:]')"
 check_eq 'Back: no diagnosis written' 0 "$(ls "$STICKD"/diag-*.txt 2>/dev/null | wc -l | tr -d '[:space:]')"
 run_stick "$CMUD" "$STICKD" - '' '1 0'
 check_rc 'not installed -> Diagnosis -> Start: exit code' "$?" 0
@@ -1340,12 +1370,12 @@ check_contains 'Install confirmation says when to pull the stick' "$TESTROOT/run
 check_not_contains 'start dialog confirmation, not the ACTION.txt one' "$TESTROOT/run.log" '(ACTION.txt)'
 run_stick "$CMUD" "$STICKD" - '' '0 1 2'
 check_rc 'installed -> Remove both -> Back -> Cancel: exit code' "$?" 0
-check_contains 'installed state offers Remove both' "$TESTROOT/run.log" 'Remove both'
+check_contains 'installed state offers Remove all' "$TESTROOT/run.log" 'Remove all'
 check_eq 'cancelled removal keeps AA' 2 "$(count_markers "$CMUD/jci/sm/sm.conf")"
 check_eq 'cancelled removal keeps TouchTune' 0 "$(tt_calls "$STICKD" --restore)"
 run_stick "$CMUD" "$STICKD" - '' '0 0'
 check_rc 'installed -> Remove both -> Start: exit code' "$?" 0
-check_contains 'Remove both asks first' "$TESTROOT/run.log" 'Selected: Remove both'
+check_contains 'Remove all asks first' "$TESTROOT/run.log" 'Selected: Remove all'
 check_contains 'removal: working message' "$TESTROOT/run.log" 'POPUP: Removing...'
 check_stock_unchanged 'Remove both restores the originals' "$CMUD" "$BEFORED"
 check_eq 'Remove both removes TouchTune' 1 "$(tt_calls "$STICKD" --restore)"
@@ -1394,6 +1424,8 @@ check_contains 'diagnosis: region' "$DIAG" 'JCI_SW_FLAVOR='
 check_contains 'diagnosis: AA state' "$DIAG" 'state=ours'
 check_contains 'diagnosis: AA XML variant' "$DIAG" 'variant=factory+touch'
 check_contains 'diagnosis: TouchTune state' "$DIAG" 'state=installed'
+check_contains 'diagnosis: boot autorun' "$DIAG" 'boot_autorun=ours'
+check_not_contains 'diagnosis: no startup script contents' "$DIAG" 'FACTORY-START-SCRIPTS'
 check_contains 'diagnosis: file hashes' "$DIAG" 'sm.conf: '
 check_contains 'diagnosis: our LD_PRELOAD lines' "$DIAG" 'libpatch-blmjciaapa.so'
 check_contains 'diagnosis: NVRAM key' "$DIAG" 'NVRAM bus_bcm_speed_restriction='
@@ -1405,6 +1437,71 @@ check_eq 'diagnosis: no copy of Mazda files on the stick' 0 \
     "$(find "$STICKG" -name 'diag-*' -type d | wc -l | tr -d '[:space:]')"
 
 # ---------------------------------------------------------------------------
+section 'Boot autorun'
+CMUXX=$(new_cmu xx74)
+STICKXX=$(new_stick xx74)
+BOOT_BEFORE=$(
+    for rel in jci/scripts/start_normal_mode.sh jci/bin/start_normal_mode.sh \
+               usr/sbin/emmc_mount_data_persist.sh; do
+        printf '%s  %s\n' "$(sha256sum "$CMUXX/$rel" | cut -d' ' -f1)" "$rel"
+    done
+)
+run_stick "$CMUXX" "$STICKXX" install
+check_rc 'boot autorun install exit code' "$?" 0
+check_file 'marker written' "$CMUXX/data_persist/mzd-xx74/install-state"
+check_contains 'marker names this installer' "$CMUXX/data_persist/mzd-xx74/install-state" \
+    "installer=$(tr -d '\r\n' <"$REPO/VERSION")"
+PROBE="$TESTROOT/autorun-probe"
+rm -rf "$PROBE"
+mkdir -p "$PROBE"
+cp "$CMUXX/data_persist/dev/bin/autorun" "$PROBE/autorun"
+printf '#!/bin/sh\necho RAN\n' >"$PROBE/a.autorun"
+printf 'echo SKIP\n' >"$PROBE/skip.txt"
+probe_out=$(sh "$PROBE/autorun")
+printf '%s\n' "$probe_out" >"$TESTROOT/xx-probe.txt"
+check_contains 'autorun runs a plugin' "$TESTROOT/xx-probe.txt" RAN
+check_not_contains 'autorun ignores other files' "$TESTROOT/xx-probe.txt" SKIP
+run_stick "$CMUXX" "$STICKXX" uninstall
+check_rc 'boot autorun removal exit code' "$?" 0
+BOOT_AFTER=$(
+    for rel in jci/scripts/start_normal_mode.sh jci/bin/start_normal_mode.sh \
+               usr/sbin/emmc_mount_data_persist.sh; do
+        printf '%s  %s\n' "$(sha256sum "$CMUXX/$rel" | cut -d' ' -f1)" "$rel"
+    done
+)
+check_eq 'startup scripts restored byte for byte' "$BOOT_BEFORE" "$BOOT_AFTER"
+check_no_file 'marker removed' "$CMUXX/data_persist/mzd-xx74/install-state"
+
+section 'Boot autorun: foreign hook is left alone'
+CMUXF=$(new_cmu xx-foreign)
+STICKXF=$(new_stick xx-foreign)
+printf '/data_persist/dev/bin/autorun &\n' >>"$CMUXF/jci/scripts/start_normal_mode.sh"
+FOREIGN_BEFORE=$(sha256sum "$CMUXF/jci/scripts/start_normal_mode.sh" | cut -d' ' -f1)
+run_stick "$CMUXF" "$STICKXF" install
+check_rc 'foreign hook: other parts still install' "$?" 0
+check_eq 'foreign startup script unchanged' "$FOREIGN_BEFORE" \
+    "$(sha256sum "$CMUXF/jci/scripts/start_normal_mode.sh" | cut -d' ' -f1)"
+check_no_file 'foreign hook: our autorun was not written' "$CMUXF/data_persist/dev/bin/autorun"
+check_contains 'foreign hook offered the other parts' "$TESTROOT/run.log" 'Boot autorun:'
+
+section 'Boot autorun: publish fault rolls the hook back'
+CMUXR=$(new_cmu xx-rollback)
+STICKXR=$(new_stick xx-rollback)
+ROLL_BEFORE=$(sha256sum "$CMUXR/jci/scripts/start_normal_mode.sh" | cut -d' ' -f1)
+run_stick "$CMUXR" "$STICKXR" install xx74-publish-fail
+check_rc_nonzero 'xx74 publish fault aborts' "$?"
+check_eq 'fault: first startup script restored' "$ROLL_BEFORE" \
+    "$(sha256sum "$CMUXR/jci/scripts/start_normal_mode.sh" | cut -d' ' -f1)"
+check_not_contains 'fault: hook not left behind' "$CMUXR/jci/bin/start_normal_mode.sh" '# mzd-xx74 begin'
+check_no_file 'fault: autorun not left behind' "$CMUXR/data_persist/dev/bin/autorun"
+check_eq 'fault: TouchTune not started' 0 "$(tt_calls "$STICKXR" .)"
+check_eq 'fault: Android Auto touch stays installed' 2 "$(count_markers "$CMUXR/jci/sm/sm.conf")"
+run_stick "$CMUXR" "$STICKXR" install
+check_rc 'fault: a new run finishes the install' "$?" 0
+check_contains 'fault: hook installed on the next run' "$CMUXR/jci/scripts/start_normal_mode.sh" '# mzd-xx74 begin'
+check_eq 'fault: TouchTune runs on the next run' 1 "$(tt_calls "$STICKXR" touch-while-driving)"
+
+# ---------------------------------------------------------------------------
 section 'Builder: real stick (tools/build_stick.py)'
 DL="$REPO/downloads"
 if [ -n "$PY" ] && [ -f "$DL/oem-aa-mod-0.10.0.zip" ] && [ -f "$DL/TouchTune-1.2.1.zip" ] && \
@@ -1412,8 +1509,8 @@ if [ -n "$PY" ] && [ -f "$DL/oem-aa-mod-0.10.0.zip" ] && [ -f "$DL/TouchTune-1.2
     if "$PY" -I "$REPO/tools/build_stick.py" build --out "$TESTROOT/dist" >"$TESTROOT/builder.log" 2>&1; then
         ok 'builder runs'
         BS="$TESTROOT/dist/stick"
-        check_eq 'builder: 25 manifest entries' 25 "$(grep -c . "$BS/PAYLOAD.SHA256" | tr -d '[:space:]')"
-        check_eq 'builder: 39 files' 39 "$(find "$BS" -type f | wc -l | tr -d '[:space:]')"
+        check_eq 'builder: 28 manifest entries' 28 "$(grep -c . "$BS/PAYLOAD.SHA256" | tr -d '[:space:]')"
+        check_eq 'builder: 42 files' 42 "$(find "$BS" -type f | wc -l | tr -d '[:space:]')"
         check_eq 'builder: one launcher at the top level' 1 "$(find "$BS" -maxdepth 1 -name '*.up' | wc -l | tr -d '[:space:]')"
         check_eq 'builder: launcher = car-proven name' "$LAUNCHER" "$(cat "$BS/LAUNCHER.NAME")"
         check_eq 'builder: 12 TouchTune files in touchtune/' 12 "$(find "$BS/touchtune" -type f | wc -l | tr -d '[:space:]')"
@@ -1507,7 +1604,7 @@ if [ -n "$PY" ] && [ -f "$DL/oem-aa-mod-0.10.0.zip" ] && [ -f "$DL/TouchTune-1.2
             check_eq 'real TouchTune: lvds restriction enabled' enable \
                 "$(cat "$CMUB/sys/class/nvram/nv-config/keys/lvds_speed_restriction" 2>/dev/null)"
         else
-            check_contains 'real stick: AA alone on an unknown Common.js' "$TESTROOT/run.log" 'Install only Android Auto touch'
+            check_contains 'real stick: AA and boot autorun on an unknown Common.js' "$TESTROOT/run.log" 'Install Android Auto touch and boot autorun'
             check_not_contains 'real stick: TouchTune not started' "$TESTROOT/run.log" 'starting TouchTune'
             run_stick "$CMUB" "$SB" uninstall
             check_rc 'real stick: removal exit code' "$?" 0

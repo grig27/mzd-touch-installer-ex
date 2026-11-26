@@ -35,7 +35,7 @@ MZD_TEST_MODE="${MZD_TEST_MODE:-0}"
 MZD_ROOT="${MZD_ROOT:-}"
 MZD_STICK="${MZD_STICK:-}"
 MZD_STICK_ID="mzd-touch-installer-v1"
-MZD_INSTALLER_VERSION="1.0.1"
+MZD_INSTALLER_VERSION="1.1.0"
 
 MZD_JCI="$MZD_ROOT/jci"
 MZD_ETC="$MZD_ROOT/etc"
@@ -164,10 +164,10 @@ mzd_popup_final() {
         case "$MZD_LAST_POPUP" in
             *"Remove the USB"*|*"pull the stick now"*) return 0 ;;
         esac
-        sync
+        [ "$MZD_TEST_MODE" = 1 ] || sync
         mzd_popup "$MZD_LAST_POPUP\n\nYou can pull the stick now."
     elif [ "$MZD_BUSY_SHOWN" = 1 ]; then
-        sync
+        [ "$MZD_TEST_MODE" = 1 ] || sync
         mzd_popup "The run has ended.\nDetails: mzd-usb.log on the stick.\n\nYou can pull the stick now."
     fi
     return 0
@@ -522,9 +522,10 @@ mzd_fsync_dir() {
 mzd_finalize() {
     local failures=0
     if [ "$MZD_TEST_MODE" = 1 ]; then
+        # Host tests run on a normal PC. sync here flushes every drive and
+        # makes the suite take tens of minutes on Windows. The car still syncs.
         MZD_ROOT_WRITABLE=0
         MZD_WATCHDOG_DISABLED=0
-        sync 2>/dev/null || true
         return 0
     fi
     sync || failures=$((failures + 1))

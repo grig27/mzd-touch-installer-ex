@@ -1,0 +1,25 @@
+Boot autorun
+============
+
+This folder is part of MZD Touch Installer. The files here are written for
+this installer. They are not a copy of another project's tree.
+
+What is installed
+  /data_persist/dev/bin/autorun
+      Runs every *.autorun file under that directory, in name order.
+  A marked block at the end of each of these scripts that exists on the car:
+      /jci/scripts/start_normal_mode.sh
+      /jci/bin/start_normal_mode.sh
+      /usr/sbin/emmc_mount_data_persist.sh
+  The block only starts /data_persist/dev/bin/autorun. The original bytes
+  of those scripts are backed up on the car first. Remove restores them.
+
+What is not installed
+  No adb program.
+  No udev rule, and nothing reads a command out of a file on a USB stick.
+  The watchdog is not left disabled, and this autorun does not start the
+  USB installer. Mazda's auto-update service starts that, as before.
+  Nothing puts these files back after Remove.
+
+No *.autorun plugin is shipped. Until a script is placed in that directory,
+the hook starts and exits.
