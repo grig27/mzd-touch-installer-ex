@@ -10,12 +10,13 @@
 | Should work on | every region of 74.00.324 / 74.00.324A (for example North America). The installer tells you when your unit differs from the tested build and asks before it changes anything. Reports are welcome. |
 | Needs | a USB stick (FAT32) and nothing else: no computer in the car, no original Mazda files |
 
-This project packages two community projects; their files are included **unmodified**, apart from one setting in oem-aa-mod's `libpatch.conf` (Android Auto 1.5 instead of 1.6, see [Android Auto 1.5 and wireless adapters](#android-auto-15-and-wireless-adapters)):
+This project packages two community projects; their files are included **unmodified**, apart from one setting in oem-aa-mod's `libpatch.conf` (Android Auto 1.5 instead of 1.6, see [Android Auto 1.5 and wireless adapters](#android-auto-15-and-wireless-adapters)). Boot autorun is written for this installer:
 
 | Part | Project | Author | License |
 |---|---|---|---|
 | Touch in Android Auto | [oem-aa-mod](https://github.com/VitaliyKurokhtin/oem-aa-mod) 0.10.0 | [VitaliyKurokhtin](https://github.com/VitaliyKurokhtin) | AGPL-3.0 |
 | Touch while driving (Mazda Connect menus) | [TouchTune](https://github.com/Miatafy/TouchTune) 1.2.1 | [Miatafy](https://github.com/Miatafy) | GPL-3.0 |
+| Boot autorun | this installer ([`xx74/`](stick/xx74)) | [Grigoriy](https://github.com/grig27) | GPL-3.0-or-later |
 
 All credit for what these two do goes to their authors. Please star and support the originals. This repository adds:
 

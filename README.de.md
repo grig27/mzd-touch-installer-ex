@@ -10,12 +10,13 @@
 | Sollte laufen auf | allen Regionen von 74.00.324 / 74.00.324A (z. B. Nordamerika). Weicht das Gerät vom getesteten Stand ab, sagt der Installer das und fragt, bevor er etwas ändert. Rückmeldungen sind willkommen. |
 | Braucht | einen USB-Stick (FAT32), sonst nichts: keinen Rechner im Auto, keine Mazda-Originaldateien |
 
-Enthalten sind zwei Community-Projekte, ihre Dateien **unverändert** bis auf eine Einstellung in der `libpatch.conf` von oem-aa-mod (Android Auto 1.5 statt 1.6, siehe unten):
+Enthalten sind zwei Community-Projekte, ihre Dateien **unverändert** bis auf eine Einstellung in der `libpatch.conf` von oem-aa-mod (Android Auto 1.5 statt 1.6, siehe unten). Boot-Autorun gehört zu diesem Installer:
 
 | Teil | Projekt | Autor | Lizenz |
 |---|---|---|---|
 | Touch in Android Auto | [oem-aa-mod](https://github.com/VitaliyKurokhtin/oem-aa-mod) 0.10.0 | [VitaliyKurokhtin](https://github.com/VitaliyKurokhtin) | AGPL-3.0 |
 | Touch während der Fahrt (Mazda-Connect-Menüs) | [TouchTune](https://github.com/Miatafy/TouchTune) 1.2.1 | [Miatafy](https://github.com/Miatafy) | GPL-3.0 |
+| Boot-Autorun | dieser Installer ([`xx74/`](stick/xx74)) | [Grigoriy](https://github.com/grig27) | GPL-3.0-or-later |
 
 Der Verdienst für die Funktionen gehört den beiden Autoren. Dieses Repository ergänzt: einen Stick und einen Dialog für beides, eine Sicherung der Originaldateien **im Auto** vor der ersten Änderung (der Rückbau spielt genau diese zurück), abgesicherte Schreibvorgänge mit automatischem Zurückrollen und einen einzigen Mazda-SafeReboot am Ende.
 
