@@ -2,7 +2,7 @@
 
 **Android Auto touch, touch while driving, and a removable boot autorun for Mazda Connect 74.00.324 / 74.00.324A, installed and removed with one USB stick.**
 
-[Deutsch](README.de.md)
+[Deutsch](README.de.md) · [Русский](README.ru.md)
 
 | | |
 |---|---|

@@ -2,7 +2,7 @@
 
 **Touch in Android Auto und Bedienung während der Fahrt für Mazda Connect 74.00.324 / 74.00.324A, mit einem USB-Stick installiert und wieder entfernt.**
 
-[English](README.md) (ausführlicher)
+[English](README.md) (ausführlicher) · [Русский](README.ru.md)
 
 | | |
 |---|---|
