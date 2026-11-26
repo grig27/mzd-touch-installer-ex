@@ -54,6 +54,14 @@ All 13 release files are copied byte for byte from `TouchTune-1.2.1.zip`
 and checked against TouchTune's own manifest. TouchTune is only ever started
 as its own process; its scripts are not changed or sourced.
 
+## Boot autorun (`xx74/` on the stick)
+
+The files `stick/lib/xx74.sh`, `stick/xx74/autorun` and `stick/xx74/SOURCE.txt`
+are part of this installer (GPL-3.0-or-later). They install a startup hook
+that runs `*.autorun` scripts from `/data_persist/dev/bin`. They are not a
+copy of another project's tree. No plugin, `adb` program, or USB command
+runner is included. See `xx74/SOURCE.txt` on the stick.
+
 ## Not included
 
 No Mazda software, firmware file or configuration file is part of this

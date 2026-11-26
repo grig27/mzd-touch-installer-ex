@@ -1,0 +1,28 @@
+#!/bin/sh
+# autorun -- run every *.autorun file under this directory, in name order.
+#
+# Installed at /data_persist/dev/bin/autorun by MZD Touch Installer.
+# Mazda's startup scripts call this file. It does not change the watchdog
+# and it does not start an installer from USB.
+#
+# Copyright (C) 2026 caeptncrack
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+/bin/chmod +x "$0" 2>/dev/null || chmod +x "$0" 2>/dev/null || true
+
+dir=$(CDPATH= cd "$(dirname "$0")" && pwd) || exit 1
+
+FIND=/usr/bin/find
+[ -x "$FIND" ] || FIND=find
+SORT=/usr/bin/sort
+[ -x "$SORT" ] || SORT=sort
+
+list=$("$FIND" "$dir" -iname '*.autorun' -type f | "$SORT")
+if [ -n "$list" ]; then
+    printf '%s\n' "$list" | while IFS= read -r script; do
+        [ -n "$script" ] || continue
+        /bin/sh "$script"
+    done
+fi
+
+exit 0

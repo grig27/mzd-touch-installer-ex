@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.0 — 2026-11-26
+
+- **Boot autorun.** The stick can install and remove a startup hook. It
+  appends a marked block to the startup scripts that exist on the car
+  (`start_normal_mode.sh` in `/jci/scripts` and `/jci/bin`, and
+  `emmc_mount_data_persist.sh`) and installs `/data_persist/dev/bin/autorun`.
+  That file runs every `*.autorun` script in its directory, in name order.
+  The original scripts are backed up on the car first; **Remove** restores
+  them byte for byte. A failure while writing rolls the hook back.
+- The hook does not disable the watchdog and does not start the USB
+  installer. Mazda's auto-update service still starts the stick. No `adb`
+  program is installed, no udev rule is installed, and nothing on the stick
+  runs a command taken from a USB file. No `*.autorun` plugin is shipped, so
+  the hook does nothing until a script is placed there. Nothing puts the
+  files back after **Remove**.
+
 ## 1.0.1 — 2026-11-01
 
 - **Android Auto 1.5 towards the phone, as from the factory.** `libpatch.conf`

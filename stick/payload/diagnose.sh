@@ -2,7 +2,7 @@
 # diagnose.sh -- write a shareable status report to the USB stick (read-only).
 #
 # Changes nothing on Mazda Connect. The report contains versions, hashes and
-# the state of both parts; it copies no Mazda files and reads only the two
+# the state of each part; it copies no Mazda files and reads only the two
 # NVRAM keys TouchTune uses, so it can be attached to a bug report.
 #
 # Copyright (C) 2026 caeptncrack
@@ -14,7 +14,8 @@ MZD_STICK="$BASE"
 export MZD_STICK
 . "$BASE/lib/mzd-safety.sh" || exit 1
 . "$BASE/lib/aa-touch.sh" || exit 2
-. "$BASE/lib/combined.sh" || exit 3
+. "$BASE/lib/xx74.sh" || exit 3
+. "$BASE/lib/combined.sh" || exit 4
 
 R="$MZD_ROOT"
 OUT="$BASE/diag-$(date +%Y%m%d-%H%M%S).txt"
@@ -83,13 +84,38 @@ OUT="$BASE/diag-$(date +%Y%m%d-%H%M%S).txt"
         echo "TouchTune backup: (not present)"
     fi
     echo
+    echo "## Boot autorun"
+    printf 'boot_autorun=%s\n' "$(xx74_state)"
+    if [ -f "$MZD_XX_AUTORUN" ]; then
+        printf 'autorun: %s bytes, sha256=%s\n' \
+            "$(mzd_bytes "$MZD_XX_AUTORUN" 2>/dev/null)" "$(mzd_sha256_file "$MZD_XX_AUTORUN" 2>/dev/null)"
+    else
+        echo "autorun: (not present)"
+    fi
+    for xx_name in $MZD_XX_NAMES; do
+        xx_path=$(xx74_path "$xx_name")
+        if [ -f "$xx_path" ]; then
+            printf '%s: %s bytes, sha256=%s, hook=%s\n' "$xx_name" \
+                "$(mzd_bytes "$xx_path" 2>/dev/null)" "$(mzd_sha256_file "$xx_path" 2>/dev/null)" \
+                "$(xx74_class "$xx_path")"
+        else
+            printf '%s: missing\n' "$xx_name"
+        fi
+    done
+    if [ -f "$MZD_XX_STATE" ]; then
+        echo "boot autorun marker:"
+        sed 's/^/  /' "$MZD_XX_STATE" 2>/dev/null
+    else
+        echo "boot autorun marker: (not present)"
+    fi
+    echo
     echo "## Processes"
     ps 2>/dev/null | grep -E 'aap_service|jciAAPA|jcinavi|jciMMUI' | grep -v grep
 } >"$OUT" 2>&1
 
 mzd_log "diagnosis written: $OUT"
 if [ "$MODE" != quiet ]; then
-    sync
+    [ "$MZD_TEST_MODE" = 1 ] || sync
     mzd_popup "Diagnosis written to the stick:\n$(basename "$OUT")\n\nNothing was changed.\nYou can pull the stick now."
 fi
 exit 0

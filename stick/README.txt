@@ -1,4 +1,5 @@
-MZD Touch Installer - Android Auto touch + touch while driving
+MZD Touch Installer - Android Auto touch, touch while driving
+and a removable boot autorun
 for Mazda Connect 74.00.324 / 74.00.324A (tested in a car on EU 74.00.324A)
 
 Project page, full instructions and source:
@@ -9,6 +10,10 @@ This stick installs or removes, in one run:
                                https://github.com/VitaliyKurokhtin/oem-aa-mod
   2. Touch while driving     - TouchTune 1.2.1 by Miatafy
                                https://github.com/Miatafy/TouchTune
+  3. Boot autorun            - a startup hook written for this installer
+                               (xx74/SOURCE.txt). It runs *.autorun scripts
+                               from /data_persist/dev/bin. No plugin is
+                               included, and it does not start this stick.
 Both are included unmodified (folders aa-mod/ and touchtune/), except one
 line of oem-aa-mod's libpatch.conf: use_protocol_v1_6 = false, so the car
 keeps offering Android Auto 1.5 as from the factory and wireless Android
@@ -19,14 +24,14 @@ navigation entries are added, the video settings stay as shipped.
 USE
   1. Stick: FAT32 (up to 32 GB), nothing else on it. Copy ALL files of the
      release ZIP to the top level of the stick (not into a folder): you see
-     run.sh, README.txt and the folders aa-mod, lib, payload, touchtune.
+     run.sh, README.txt and the folders aa-mod, lib, payload, touchtune, xx74.
   2. Car in ACC or engine running, Mazda Connect fully started.
   3. Plug the stick into a USB port of the centre console. After a few
      seconds a dialog shows the current state and offers:
        nothing installed     -> Install / Diagnosis / Cancel
-       both installed        -> Remove both / Diagnosis / Cancel
-       one of them installed -> Install / Remove / Cancel
-       older version (1.0.0) -> Update / Remove (both) / Cancel
+       all three installed   -> Remove all / Diagnosis / Cancel
+       some of them installed-> Install / Remove / Cancel
+       older version (1.0.0) -> Update / Remove all (or Remove) / Cancel
      Update works in place with the backup already on the car.
   4. Every button first opens a short confirmation that says what will
      happen: tap Start (Back returns to the start dialog).
@@ -35,8 +40,9 @@ USE
      "You can pull the stick now" when a run ends without one.
 
   Before the first change the installer backs up the original files ON THE
-  CAR (/data_persist/mzd-aa-touch/backups/ and /data/touchtune/backups/).
-  "Remove" restores exactly those files. No Mazda file is on this stick.
+  CAR (/data_persist/mzd-aa-touch/backups/, /data_persist/mzd-xx74/backups/
+  and /data/touchtune/backups/). "Remove" restores exactly those files.
+  No Mazda file is on this stick.
 
 FILES THE STICK WRITES
   mzd-usb.log      log of every run (attach it to a bug report)

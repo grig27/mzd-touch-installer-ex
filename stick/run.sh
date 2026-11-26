@@ -84,16 +84,17 @@ sha256_of() {
 # --- 2) Complete payload manifest ------------------------------------------
 MANIFEST="$BASE/PAYLOAD.SHA256"
 EXPECTED="VERSION STICK.ID LAUNCHER.NAME jci-autoupdate run.sh \
-lib/mzd-safety.sh lib/aa-touch.sh lib/combined.sh lib/touchtune-launcher \
+lib/mzd-safety.sh lib/aa-touch.sh lib/xx74.sh lib/combined.sh lib/touchtune-launcher \
 payload/install.sh payload/uninstall.sh payload/diagnose.sh \
 aa-mod/SHA256SUMS \
+xx74/autorun xx74/SOURCE.txt \
 touchtune/install-patches.sh touchtune/lib/touchtune-helpers.sh \
 touchtune/patches/touch-while-driving.sh touchtune/PAYLOAD.SHA256 \
 touchtune/TOUCHTUNE.ID touchtune/VERSION touchtune/LAUNCHER.NAME \
 touchtune/jci-autoupdate touchtune/LICENSE touchtune/NOTICE touchtune/SOURCE.txt \
 touchtune/macos-usb-eject.sh"
 # The official TouchTune launcher travels as lib/touchtune-launcher (see 3b).
-EXPECTED_COUNT=25
+EXPECTED_COUNT=28
 
 [ -f "$MANIFEST" ] || fail "PAYLOAD.SHA256 is missing"
 manifest_lines=$(grep -c . "$MANIFEST" 2>/dev/null | tr -d '[:space:]')
@@ -156,7 +157,8 @@ if [ -e "$tt_launcher_path" ] || [ -L "$tt_launcher_path" ]; then
     echo "TouchTune launcher present"
 else
     tt_tmp="$BASE/touchtune/.launcher.tmp"
-    { cp "$BASE/lib/touchtune-launcher" "$tt_tmp" && mv -f "$tt_tmp" "$tt_launcher_path" && sync && \
+    { cp "$BASE/lib/touchtune-launcher" "$tt_tmp" && mv -f "$tt_tmp" "$tt_launcher_path" && \
+        { [ "${MZD_TEST_MODE:-0}" = 1 ] || sync; } && \
         [ "$(sha256_of "$tt_launcher_path")" = "$tt_launcher_want" ]; } || {
         rm -f "$tt_tmp" 2>/dev/null
         fail "the TouchTune launcher could not be written to the stick (read-only?)"
@@ -170,6 +172,7 @@ if [ "${MZD_TEST_MODE:-0}" != 1 ]; then
     [ -d /jci ] || fail "/jci not found - this is not a Mazda Connect unit"
 fi
 . "$BASE/lib/aa-touch.sh" || fail "the AA touch library could not be loaded"
+. "$BASE/lib/xx74.sh" || fail "the boot autorun library could not be loaded"
 . "$BASE/lib/combined.sh" || fail "the combined library could not be loaded"
 mzd_install_traps
 mzd_guard || fail "another installer run is already active"
@@ -182,7 +185,7 @@ run_payload() {
     [ -f "$BASE/payload/$1.sh" ] || { mzd_error "payload missing: $1"; exit 1; }
     sh "$BASE/payload/$1.sh" "$BASE"
     rc=$?
-    sync
+    [ "${MZD_TEST_MODE:-0}" = 1 ] || sync
     echo "payload result: $rc"
     exit "$rc"
 }
@@ -190,7 +193,7 @@ run_payload() {
 # --- 5) Firmware -------------------------------------------------------------
 if ! mzd_require_firmware; then
     MZD_TEST_MODE="${MZD_TEST_MODE:-0}" sh "$BASE/payload/diagnose.sh" "$BASE" quiet >/dev/null 2>&1
-    sync
+    [ "${MZD_TEST_MODE:-0}" = 1 ] || sync
     mzd_popup "Unsupported firmware: ${MZD_FW:-$(mzd_firmware 2>/dev/null || echo unknown)} ($MZD_FW_FLAVOR).\n\nThis installer supports Mazda Connect 74.00.324 and 74.00.324A.\nNothing was changed. A diagnosis file was written to the stick.\n\nYou can pull the stick now."
     exit 1
 fi
@@ -202,7 +205,7 @@ if [ -f "$BASE/ACTION.txt" ]; then
 fi
 
 combined_detect
-STATE_TEXT="Android Auto touch: $(combined_aa_label "$COMBINED_AA")\nTouch while driving (TouchTune): $(combined_tt_label "$COMBINED_TT")"
+STATE_TEXT="Android Auto touch: $(combined_aa_label "$COMBINED_AA")\nTouch while driving (TouchTune): $(combined_tt_label "$COMBINED_TT")\nBoot autorun: $(xx74_label "$COMBINED_XX")"
 
 # Every button of the start dialog opens a confirmation that says what will
 # happen and when the stick may be pulled; "Back" returns to the start dialog.
@@ -236,11 +239,15 @@ if [ -z "$ACTION" ]; then
     while :; do
         round=$((round + 1))
         KIND=""
-        case "$COMBINED_AA:$COMBINED_TT" in
-            payload-invalid:*|*:payload-invalid)
+        case "$COMBINED_AA:$COMBINED_TT:$COMBINED_XX" in
+            payload-invalid:*|*:payload-invalid:*|*:*:payload-invalid)
                 fail "the installer files on the stick are damaged"
                 ;;
-            outdated:installed)
+            outdated:installed:ours)
+                mzd_ask3 "$STATE_TEXT\n\n$UPDATE_TEXT\nWhat do you want to do?" "Update" "Remove all" "Cancel"
+                case $? in 0) ACTION=install; KIND=update; LABEL=Update ;; 1) ACTION=uninstall; LABEL="Remove all" ;; *) ACTION=exit ;; esac
+                ;;
+            outdated:installed:*|outdated:*:ours)
                 mzd_ask3 "$STATE_TEXT\n\n$UPDATE_TEXT\nWhat do you want to do?" "Update" "Remove both" "Cancel"
                 case $? in 0) ACTION=install; KIND=update; LABEL=Update ;; 1) ACTION=uninstall; LABEL="Remove both" ;; *) ACTION=exit ;; esac
                 ;;
@@ -248,16 +255,16 @@ if [ -z "$ACTION" ]; then
                 mzd_ask3 "$STATE_TEXT\n\n$UPDATE_TEXT\nWhat do you want to do?" "Update" "Remove" "Cancel"
                 case $? in 0) ACTION=install; KIND=update; LABEL=Update ;; 1) ACTION=uninstall; LABEL=Remove ;; *) ACTION=exit ;; esac
                 ;;
-            ours:installed)
-                mzd_ask3 "$STATE_TEXT\n\nWhat do you want to do?" "Remove both" "Diagnosis" "Cancel"
-                case $? in 0) ACTION=uninstall; LABEL="Remove both" ;; 1) ACTION=diagnose; LABEL=Diagnosis ;; *) ACTION=exit ;; esac
+            ours:installed:ours)
+                mzd_ask3 "$STATE_TEXT\n\nWhat do you want to do?" "Remove all" "Diagnosis" "Cancel"
+                case $? in 0) ACTION=uninstall; LABEL="Remove all" ;; 1) ACTION=diagnose; LABEL=Diagnosis ;; *) ACTION=exit ;; esac
                 ;;
-            ours:*|partial:*|*:installed|*:partial)
+            ours:*|partial:*|*:installed:*|*:partial:*|*:*:ours|*:*:partial)
                 mzd_ask3 "$STATE_TEXT\n\nWhat do you want to do?" "Install" "Remove" "Cancel"
                 case $? in 0) ACTION=install; LABEL=Install ;; 1) ACTION=uninstall; LABEL=Remove ;; *) ACTION=exit ;; esac
                 ;;
             *)
-                mzd_ask3 "$STATE_TEXT\n\nInstall Android Auto touch and touch while driving?\nYour original files are backed up on this car first." "Install" "Diagnosis" "Cancel"
+                mzd_ask3 "$STATE_TEXT\n\nInstall Android Auto touch, touch while driving\nand boot autorun?\nYour original files are backed up on this car first." "Install" "Diagnosis" "Cancel"
                 case $? in 0) ACTION=install; LABEL=Install ;; 1) ACTION=diagnose; LABEL=Diagnosis ;; *) ACTION=exit ;; esac
                 ;;
         esac
@@ -298,7 +305,7 @@ case "$ACTION" in
     exit|cancel)
         echo "action: exit"
         if [ "$CANCELLED" = 1 ]; then
-            sync
+            [ "${MZD_TEST_MODE:-0}" = 1 ] || sync
             mzd_popup "Cancelled. Nothing was changed.\n\nYou can pull the stick now."
         fi
         exit 0
@@ -306,6 +313,7 @@ case "$ACTION" in
     status)
         aa_status
         printf 'touchtune=%s\n' "$COMBINED_TT"
+        printf 'xx74=%s\n' "$COMBINED_XX"
         exit 0
         ;;
     touchtune)

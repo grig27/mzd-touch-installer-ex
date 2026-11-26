@@ -1,8 +1,8 @@
 # MZD Touch Installer
 
-**Android Auto touch + touch while driving for Mazda Connect 74.00.324 / 74.00.324A, installed and removed with one USB stick.**
+**Android Auto touch, touch while driving, and a removable boot autorun for Mazda Connect 74.00.324 / 74.00.324A, installed and removed with one USB stick.**
 
-[Deutsch](README.de.md)
+[Deutsch](README.de.md) · [Русский](README.ru.md)
 
 | | |
 |---|---|
@@ -10,16 +10,17 @@
 | Should work on | every region of 74.00.324 / 74.00.324A (for example North America). The installer tells you when your unit differs from the tested build and asks before it changes anything. Reports are welcome. |
 | Needs | a USB stick (FAT32) and nothing else: no computer in the car, no original Mazda files |
 
-This project packages two community projects; their files are included **unmodified**, apart from one setting in oem-aa-mod's `libpatch.conf` (Android Auto 1.5 instead of 1.6, see [Android Auto 1.5 and wireless adapters](#android-auto-15-and-wireless-adapters)):
+This project packages two community projects; their files are included **unmodified**, apart from one setting in oem-aa-mod's `libpatch.conf` (Android Auto 1.5 instead of 1.6, see [Android Auto 1.5 and wireless adapters](#android-auto-15-and-wireless-adapters)). Boot autorun is written for this installer:
 
 | Part | Project | Author | License |
 |---|---|---|---|
 | Touch in Android Auto | [oem-aa-mod](https://github.com/VitaliyKurokhtin/oem-aa-mod) 0.10.0 | [VitaliyKurokhtin](https://github.com/VitaliyKurokhtin) | AGPL-3.0 |
 | Touch while driving (Mazda Connect menus) | [TouchTune](https://github.com/Miatafy/TouchTune) 1.2.1 | [Miatafy](https://github.com/Miatafy) | GPL-3.0 |
+| Boot autorun | this installer ([`xx74/`](stick/xx74)) | [caeptncrack](https://github.com/caeptncrack) | GPL-3.0-or-later |
 
 All credit for what these two do goes to their authors. Please star and support the originals. This repository adds:
 
-- one stick and one dialog for both parts (install, remove, diagnosis)
+- one stick and one dialog for all three parts (install, remove, diagnosis)
 - oem-aa-mod's touch entries are added to **your car's own** Android Auto XML files instead of replacing them, so the video settings Android Auto gets (and with them the picture scaling) stay as shipped; see [The Android Auto XML](#the-android-auto-xml)
 - a backup of your original files **on the car** before the first change; removal restores exactly those files, so no Mazda file has to come from the internet or from the stick
 - safety around every write: verified payload, staged files, XML validation, atomic rename, read-back, automatic rollback, and a single Mazda SafeReboot at the end
@@ -40,6 +41,8 @@ See the [oem-aa-mod README](https://github.com/VitaliyKurokhtin/oem-aa-mod) for 
 
 **Touch while driving** (TouchTune): the Mazda Connect touch screen keeps working while the car is moving (by default Mazda locks it once the car moves).
 
+**Boot autorun** (written for this installer, see `xx74/SOURCE.txt` on the stick): on every start, Mazda Connect runs `/data_persist/dev/bin/autorun`, which runs any `*.autorun` scripts placed in that directory. The installer does not ship such a script, so the hook is idle until one is added. It does not start this USB installer, it does not read commands from a USB file, and it does not install `adb`. **Remove** deletes the hook and restores the original startup scripts from the backup taken on the car.
+
 > **Safety and law.** Touching a screen while driving distracts you. Use it only when it is safe and allowed where you drive (in Germany, for example, § 23 (1a) StVO restricts operating devices while driving). You stay responsible. A passenger is the best user of this feature.
 
 ## Use
@@ -48,15 +51,15 @@ See the [oem-aa-mod README](https://github.com/VitaliyKurokhtin/oem-aa-mod) for 
 2. **Prepare the stick.** Use an empty USB stick of up to 32 GB, formatted as **FAT32** (Windows: right-click the stick → *Format…* → *FAT32*).
    - **Windows:** right-click the ZIP → *Extract All…* → *Browse…* → choose the stick → *Extract*. Or extract it anywhere, open the folder, select everything inside (Ctrl+A) and drag it onto the stick. Eject the stick before you pull it.
    - **macOS:** double-click the ZIP, open the new folder, select everything inside (Cmd+A) and drag it onto the stick. Then open *Terminal* and run `dot_clean -m /Volumes/<STICK>` (Finder adds hidden `._` files that can stop the car from starting the stick). Eject the stick.
-   - **Check:** when you open the stick you see `run.sh`, `README.txt`, `STICK.ID` and the folders `aa-mod`, `lib`, `payload` and `touchtune` directly, not inside another folder. Nothing else is on the stick.
+   - **Check:** when you open the stick you see `run.sh`, `README.txt`, `STICK.ID` and the folders `aa-mod`, `lib`, `payload`, `touchtune` and `xx74` directly, not inside another folder. Nothing else is on the stick.
 3. **In the car.** Engine running is safest (the unit must not lose power while it writes). Wait until Mazda Connect has fully started. Plug the stick into a USB port in the centre console. After a few seconds a dialog shows the current state:
 
    | State | Buttons |
    |---|---|
    | nothing installed | **Install** · Diagnosis · Cancel |
-   | both installed | **Remove both** · Diagnosis · Cancel |
-   | one of them installed | **Install** · Remove · Cancel |
-   | an older version of Android Auto touch installed | **Update** · Remove both (or Remove) · Cancel, see [Update from 1.0.0](#update-from-100) |
+   | all three installed | **Remove all** · Diagnosis · Cancel |
+   | some of them installed | **Install** · Remove · Cancel |
+   | an older version of Android Auto touch installed | **Update** · Remove all (or Remove) · Cancel, see [Update from 1.0.0](#update-from-100) |
 
 4. Choose **Install**. A confirmation opens and says in a few lines what will happen; tap **Start** (**Back** returns to the start dialog). Every button of the start dialog asks like this first.
 5. While it works the screen says *Do not pull the stick*. Pull the stick only when the screen tells you to: *Remove the USB* before the restart, or *You can pull the stick now* when a run ends without one. Mazda Connect restarts by itself (or asks *Restart now*).
@@ -66,7 +69,7 @@ If your unit is not the tested EU build, the installer says so ("differs from th
 
 ## Remove
 
-Plug the same stick in again, choose **Remove both** and confirm with **Start**. Android Auto touch is restored from the backup taken on your car, byte for byte; TouchTune restores its own backup. Mazda Connect restarts at the end. You do not need any original Mazda files.
+Plug the same stick in again, choose **Remove all** and confirm with **Start**. Android Auto touch and the boot autorun are restored from the backups taken on your car, byte for byte; TouchTune restores its own backup. Mazda Connect restarts at the end. You do not need any original Mazda files.
 
 After an official Mazda software update the changes are gone, but the shims in `/data_persist` stay. Run the stick again: it notices the update, takes a new backup and installs again.
 
@@ -117,6 +120,7 @@ Write path, for each file: backup on the car (written once, verified) → staged
 | `diag-*.txt` | written by **Diagnosis**: versions, file hashes, state of both parts. No Mazda file contents and no personal data, so you can attach it to an issue |
 | `touchtune/touchtune.log` | TouchTune's own log |
 | `backup-aa-touch-*/` | a copy of the original Android Auto files of **your** car (the main backup stays on the car). Keep it; do not upload it |
+| `backup-xx74-*/` | a copy of the original startup scripts of **your** car. Keep it; do not upload it |
 
 ## Troubleshooting
 
@@ -159,8 +163,9 @@ The suite runs on any POSIX shell (Git Bash, Linux, macOS, BusyBox ash in Docker
 ```
 stick/            files that go on the stick
   run.sh          entry point: checks the stick, shows the dialog
-  lib/            mzd-safety.sh (write safety), aa-touch.sh (oem-aa-mod), combined.sh (both parts)
+  lib/            mzd-safety.sh (write safety), aa-touch.sh (oem-aa-mod), xx74.sh (boot autorun), combined.sh
   payload/        install.sh, uninstall.sh, diagnose.sh
+  xx74/           autorun and SOURCE.txt (the boot hook; no plugins)
 tools/build_stick.py
 tests/run-tests.sh
 ```
@@ -171,4 +176,4 @@ tests/run-tests.sh
 - oem-aa-mod by VitaliyKurokhtin: AGPL-3.0. The release files are included unmodified, except one line of `libpatch.conf` (`use_protocol_v1_6 = false`); source: <https://github.com/VitaliyKurokhtin/oem-aa-mod/tree/0.10.0>.
 - TouchTune by Miatafy: GPL-3.0, based on MZD-AIO by Trevelopment. Included unmodified; source: <https://github.com/Miatafy/TouchTune>.
 
-Not affiliated with or endorsed by Mazda Motor Corporation, the authors of oem-aa-mod or TouchTune, or Google. Android Auto is a trademark of Google LLC. Modifying the head unit may affect your warranty. This software comes with no warranty; use it at your own risk. "Remove both" is always available.
+Not affiliated with or endorsed by Mazda Motor Corporation, the authors of oem-aa-mod or TouchTune, or Google. Android Auto is a trademark of Google LLC. Modifying the head unit may affect your warranty. This software comes with no warranty; use it at your own risk. "Remove all" is always available.
