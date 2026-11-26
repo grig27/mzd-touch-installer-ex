@@ -5,7 +5,7 @@
 # Mazda's startup scripts call this file. It does not change the watchdog
 # and it does not start an installer from USB.
 #
-# Copyright (C) 2026 Grigoriy
+# Copyright (C) 2026 caeptncrack
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 /bin/chmod +x "$0" 2>/dev/null || chmod +x "$0" 2>/dev/null || true

@@ -16,7 +16,7 @@ Enthalten sind zwei Community-Projekte, ihre Dateien **unverändert** bis auf ei
 |---|---|---|---|
 | Touch in Android Auto | [oem-aa-mod](https://github.com/VitaliyKurokhtin/oem-aa-mod) 0.10.0 | [VitaliyKurokhtin](https://github.com/VitaliyKurokhtin) | AGPL-3.0 |
 | Touch während der Fahrt (Mazda-Connect-Menüs) | [TouchTune](https://github.com/Miatafy/TouchTune) 1.2.1 | [Miatafy](https://github.com/Miatafy) | GPL-3.0 |
-| Boot-Autorun | dieser Installer ([`xx74/`](stick/xx74)) | [Grigoriy](https://github.com/grig27) | GPL-3.0-or-later |
+| Boot-Autorun | dieser Installer ([`xx74/`](stick/xx74)) | [caeptncrack](https://github.com/caeptncrack) | GPL-3.0-or-later |
 
 Der Verdienst für die Funktionen gehört den beiden Autoren. Dieses Repository ergänzt: einen Stick und einen Dialog für beides, eine Sicherung der Originaldateien **im Auto** vor der ersten Änderung (der Rückbau spielt genau diese zurück), abgesicherte Schreibvorgänge mit automatischem Zurückrollen und einen einzigen Mazda-SafeReboot am Ende.
 

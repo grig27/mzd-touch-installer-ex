@@ -16,7 +16,7 @@ This project packages two community projects; their files are included **unmodif
 |---|---|---|---|
 | Touch in Android Auto | [oem-aa-mod](https://github.com/VitaliyKurokhtin/oem-aa-mod) 0.10.0 | [VitaliyKurokhtin](https://github.com/VitaliyKurokhtin) | AGPL-3.0 |
 | Touch while driving (Mazda Connect menus) | [TouchTune](https://github.com/Miatafy/TouchTune) 1.2.1 | [Miatafy](https://github.com/Miatafy) | GPL-3.0 |
-| Boot autorun | this installer ([`xx74/`](stick/xx74)) | [Grigoriy](https://github.com/grig27) | GPL-3.0-or-later |
+| Boot autorun | this installer ([`xx74/`](stick/xx74)) | [caeptncrack](https://github.com/caeptncrack) | GPL-3.0-or-later |
 
 All credit for what these two do goes to their authors. Please star and support the originals. This repository adds:
 

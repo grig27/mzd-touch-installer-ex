@@ -11,7 +11,7 @@
 # at this part's own directory for the duration of a call. Callers must source
 # this file before lib/combined.sh.
 #
-# Copyright (C) 2026 Grigoriy
+# Copyright (C) 2026 caeptncrack
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [ -n "${MZD_XX74_LOADED:-}" ] && return 0
